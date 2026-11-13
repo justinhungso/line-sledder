@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Line Sledder - 2D Physics Sandbox</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            box-sizing: border-box;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+        }
+
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+            color: #f8fafc;
+        }
+
+        .tool-btn {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .tool-btn:active {
+            transform: scale(0.92);
+        }
+
+        .tool-btn.active {
+            background-color: #2563eb;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .dark .tool-btn.active {
+            background-color: #3b82f6;
+            color: #ffffff;
+        }
+
+        .line-type-btn.active-normal {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 0 0 2px #93c5fd;
+        }
+        .line-type-btn.active-boost {
+            background-color: #ef4444;
+            color: white;
+            box-shadow: 0 0 0 2px #fca5a5;
+        }
+        .line-type-btn.active-bounce {
+            background-color: #10b981;
+            color: white;
+            box-shadow: 0 0 0 2px #6ee7b7;
+        }
+        .line-type-btn.active-scenery {
+            background-color: #64748b;
+            color: white;
+            box-shadow: 0 0 0 2px #cbd5e1;
+        }
+
+        .mono-stat {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Tooltip styling for desktop */
+        @media (hover: hover) {
+            .has-tooltip:hover .tooltip {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+        }
+        .tooltip {
+            opacity: 0;
+            transform: translateY(4px);
+            transition: all 0.15s ease;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+    </style>
+<link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Line Sledder">
+    <link rel="apple-touch-icon" href="icon-180.png">
+</head>
+<body class="relative select-none">
+
+    <!-- Canvas Area -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Top HUD & Playback Bar -->
+    <div class="fixed top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none z-20">
+        
+        <!-- Brand & Telemetry -->
+        <div class="glass-panel rounded-2xl px-3.5 py-2 flex items-center gap-4 pointer-events-auto">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                    <i class="fa-solid fa-person-sledding text-sm"></i>
+                </div>
+                <div class="hidden sm:block">
+                    <h1 class="font-extrabold text-sm tracking-tight leading-none">LINE SLEDDER</h1>
+                    <span class="text-[10px] opacity-60 font-semibold tracking-wider uppercase">Physics Sandbox</span>
+                </div>
+            </div>
+
+            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700"></div>
+
+            <!-- Live Stats -->
+            <div class="flex items-center gap-3 text-xs">
+                <div>
+                    <span class="opacity-60 block text-[10px] font-semibold uppercase">Speed</span>
+                    <span id="statSpeed" class="mono-stat font-bold text-blue-600 dark:text-blue-400">0.0</span> <span class="text-[10px] opacity-60">m/s</span>
+                </div>
+                <div class="hidden xs:block">
+                    <span class="opacity-60 block text-[10px] font-semibold uppercase">Air Time</span>
+                    <span id="statAir" class="mono-stat font-bold text-emerald-600 dark:text-emerald-400">0.0s</span>
+                </div>
+                <div>
+                    <span class="opacity-60 block text-[10px] font-semibold uppercase">Lines</span>
+                    <span id="statLines" class="mono-stat font-bold">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Playback Controls -->
+        <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1 pointer-events-auto">
+            <button id="btnPlayPause" class="tool-btn px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-sm">
+                <i id="iconPlayPause" class="fa-solid fa-play"></i>
+                <span id="textPlayPause">Play</span>
+            </button>
+            <button id="btnStop" class="tool-btn px-3 py-2 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5" title="Reset Rider (Space / R)">
+                <i class="fa-solid fa-rotate-left text-rose-500"></i>
+                <span class="hidden md:inline">Reset</span>
+            </button>
+            <div class="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+            <button id="btnSlowMo" class="tool-btn px-2.5 py-2 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1" title="Toggle Slow Motion (0.25x)">
+                <i class="fa-solid fa-gauge-simple-low text-amber-500"></i>
+                <span id="textSlowMo" class="mono-stat">1x</span>
+            </button>
+            <button id="btnFollowCam" class="tool-btn active px-2.5 py-2 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-1.5" title="Follow Rider Camera">
+                <i class="fa-solid fa-video"></i>
+                <span class="hidden lg:inline">Follow</span>
+            </button>
+        </div>
+
+        <!-- Right Utility Controls -->
+        <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1 pointer-events-auto">
+            <button id="btnDemo" class="tool-btn px-2.5 py-2 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs font-bold flex items-center gap-1.5" title="Load Preset Stunt Track">
+                <i class="fa-solid fa-star"></i>
+                <span class="hidden sm:inline">Demo Track</span>
+            </button>
+            <button id="btnCenter" class="tool-btn w-8 h-8 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 flex items-center justify-center text-xs" title="Center Camera on Rider">
+                <i class="fa-solid fa-crosshairs"></i>
+            </button>
+            <button id="btnTheme" class="tool-btn w-8 h-8 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 flex items-center justify-center text-xs" title="Toggle Blueprint/Dark Grid">
+                <i id="iconTheme" class="fa-solid fa-moon"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Wipeout / Status Banner -->
+    <div id="statusBanner" class="fixed top-20 left-1/2 -translate-x-1/2 pointer-events-none z-20 transition-all duration-300 opacity-0 scale-90">
+        <div class="bg-rose-600 text-white px-4 py-1.5 rounded-full font-extrabold text-xs tracking-wider uppercase shadow-lg flex items-center gap-2">
+            <i class="fa-solid fa-burst"></i>
+            <span id="statusBannerText">WIPEOUT!</span>
+        </div>
+    </div>
+
+    <!-- Bottom Floating Dock: Drawing Tools & Line Types -->
+    <div class="fixed bottom-4 left-1/2 -translate-x-1/2 max-w-[96vw] pointer-events-none z-20 flex flex-col items-center gap-2">
+        
+        <!-- Line Type Sub-bar -->
+        <div id="lineTypeBar" class="glass-panel rounded-2xl p-1 flex items-center gap-1 pointer-events-auto transition-all duration-200">
+            <button data-linetype="normal" class="line-type-btn active-normal tool-btn px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-blue-400 border border-white"></span>
+                <span>Track</span>
+            </button>
+            <button data-linetype="boost" class="line-type-btn tool-btn px-3 py-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5">
+                <i class="fa-solid fa-angles-right text-red-500 text-[10px]"></i>
+                <span>Boost</span>
+            </button>
+            <button data-linetype="bounce" class="line-type-btn tool-btn px-3 py-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5">
+                <i class="fa-solid fa-arrows-up-to-line text-emerald-500 text-[10px]"></i>
+                <span>Bounce</span>
+            </button>
+            <button data-linetype="scenery" class="line-type-btn tool-btn px-3 py-1.5 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 text-xs font-bold flex items-center gap-1.5">
+                <i class="fa-solid fa-paintbrush text-slate-400 text-[10px]"></i>
+                <span>Scenery</span>
+            </button>
+        </div>
+
+        <!-- Main Tool Dock -->
+        <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1 pointer-events-auto overflow-x-auto max-w-full">
+            <button data-tool="pencil" class="draw-tool-btn tool-btn active px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 has-tooltip">
+                <i class="fa-solid fa-pencil text-sm"></i>
+                <span class="hidden sm:inline">Pencil</span>
+            </button>
+            
+            <button data-tool="line" class="draw-tool-btn tool-btn px-3.5 py-2.5 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-slash text-sm"></i>
+                <span class="hidden sm:inline">Line</span>
+            </button>
+
+            <button data-tool="eraser" class="draw-tool-btn tool-btn px-3.5 py-2.5 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-eraser text-sm"></i>
+                <span class="hidden sm:inline">Eraser</span>
+            </button>
+
+            <button data-tool="pan" class="draw-tool-btn tool-btn px-3.5 py-2.5 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-2">
+                <i class="fa-solid fa-hand text-sm"></i>
+                <span class="hidden sm:inline">Pan</span>
+            </button>
+
+            <button data-tool="flag" class="draw-tool-btn tool-btn px-3.5 py-2.5 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 text-xs font-semibold flex items-center gap-2" title="Set Spawn Point">
+                <i class="fa-solid fa-flag-checkered text-sm text-amber-500"></i>
+                <span class="hidden md:inline">Start Flag</span>
+            </button>
+
+            <div class="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+            <button id="btnUndo" class="tool-btn w-9 h-9 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 flex items-center justify-center text-xs disabled:opacity-30" title="Undo (Ctrl+Z)">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button id="btnRedo" class="tool-btn w-9 h-9 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-800 flex items-center justify-center text-xs disabled:opacity-30" title="Redo (Ctrl+Y)">
+                <i class="fa-solid fa-rotate-right"></i>
+            </button>
+            <button id="btnClear" class="tool-btn w-9 h-9 rounded-xl hover:bg-rose-500/10 text-rose-500 flex items-center justify-center text-xs" title="Clear All Lines">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (No browser alert/confirm) -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="glass-panel rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-200 dark:border-slate-700 animate-fade-in">
+            <div class="w-11 h-11 rounded-2xl bg-rose-500/15 text-rose-500 flex items-center justify-center text-lg mb-4">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 id="modalTitle" class="text-lg font-extrabold mb-1">Clear Entire Track?</h3>
+            <p id="modalDesc" class="text-xs opacity-75 mb-6 leading-relaxed">This will remove all lines currently on the canvas. You can still Undo this action afterward.</p>
+            <div class="flex items-center justify-end gap-2">
+                <button id="btnModalCancel" class="px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-200/70 dark:hover:bg-slate-800">Cancel</button>
+                <button id="btnModalConfirm" class="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-md">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * LINE SLEDDER - 2D VERLET PHYSICS & TRACK SANDBOX
+         * Complete single-file architecture:
+         * 1. Track Line Management & Undo/Redo Stack
+         * 2. Verlet Physics Engine (Stick constraints, angular posture springs, line segment collision)
+         * 3. Animated Scarf & Particle Effects (Snow spray, boost sparks)
+         * 4. Multi-touch & Pointer Canvas Controller (Draw, Line, Erase, Pinch-Zoom, Pan)
+         */
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- App State ---
+        const state = {
+            mode: 'edit', // 'edit' | 'play' | 'paused'
+            tool: 'pencil', // 'pencil' | 'line' | 'eraser' | 'pan' | 'flag'
+            lineType: 'normal', // 'normal' | 'boost' | 'bounce' | 'scenery'
+            slowMo: false,
+            followCam: true,
+            darkMode: false,
+            eraserRadius: 24,
+            minSegmentLength: 14,
+            spawnPoint: { x: 0, y: 0 },
+            camera: { x: 250, y: 120, zoom: 0.9, targetZoom: 0.9 },
+            pointer: {
+                active: false,
+                panning: false,
+                startX: 0,
+                startY: 0,
+                worldX: 0,
+                worldY: 0,
+                lastWorldX: 0,
+                lastWorldY: 0,
+                lastScreenX: 0,
+                lastScreenY: 0
+            },
+            touches: new Map(),
+            lastPinchDist: null,
+            lines: [],
+            undoStack: [],
+            redoStack: [],
+            particles: [],
+            airTime: 0,
+            currentSpeed: 0
+        };
+
+        // --- Line Properties ---
+        const LINE_STYLES = {
+            normal: { color: '#2563eb', darkColor: '#60a5fa', width: 5, friction: 0.0001, bounce: 0.02, boost: 0, solid: true },
+            boost:  { color: '#ef4444', darkColor: '#f87171', width: 6, friction: 0.0, bounce: 0.02, boost: 0.52, solid: true },
+            bounce: { color: '#10b981', darkColor: '#34d399', width: 6, friction: 0.0002, bounce: 1.35, boost: 0, solid: true },
+            scenery:{ color: '#94a3b8', darkColor: '#475569', width: 3.5, friction: 0, bounce: 0, boost: 0, solid: false }
+        };
+
+        // --- Coordinate Helpers ---
+        function screenToWorld(sx, sy) {
+            return {
+                x: (sx - canvas.width / 2) / state.camera.zoom + state.camera.x,
+                y: (sy - canvas.height / 2) / state.camera.zoom + state.camera.y
+            };
+        }
+
+        function worldToScreen(wx, wy) {
+            return {
+                x: (wx - state.camera.x) * state.camera.zoom + canvas.width / 2,
+                y: (wy - state.camera.y) * state.camera.zoom + canvas.height / 2
+            };
+        }
+
+        // --- History / Undo System ---
+        function saveHistory() {
+            const snapshot = JSON.parse(JSON.stringify(state.lines));
+            state.undoStack.push(snapshot);
+            if (state.undoStack.length > 40) state.undoStack.shift();
+            state.redoStack = [];
+            updateHistoryUI();
+        }
+
+        function undo() {
+            if (state.undoStack.length === 0) return;
+            state.redoStack.push(JSON.parse(JSON.stringify(state.lines)));
+            state.lines = state.undoStack.pop();
+            updateHistoryUI();
+        }
+
+        function redo() {
+            if (state.redoStack.length === 0) return;
+            state.undoStack.push(JSON.parse(JSON.stringify(state.lines)));
+            state.lines = state.redoStack.pop();
+            updateHistoryUI();
+        }
+
+        function updateHistoryUI() {
+            document.getElementById('btnUndo').disabled = state.undoStack.length === 0;
+            document.getElementById('btnRedo').disabled = state.redoStack.length === 0;
+            document.getElementById('statLines').textContent = state.lines.length;
+        }
+
+        // --- Line Creation Helper ---
+        function createLineSegment(x1, y1, x2, y2, type = 'normal') {
+            const dx = x2 - x1;
+            const dy = y2 - y1;
+            const len = Math.hypot(dx, dy);
+            if (len < 2) return null;
+            // Normal vector pointing "up" relative to drawing direction
+            let nx = dy / len;
+            let ny = -dx / len;
+            // Make normal generally point upwards if nearly horizontal for convenience
+            if (ny > 0 && type === 'bounce') {
+                nx = -nx;
+                ny = -ny;
+            }
+            return { x1, y1, x2, y2, dx: dx / len, dy: dy / len, nx, ny, len, type };
+        }
+
+        // --- Physics Rider Class (Verlet Integration) ---
+        class SledRider {
+            constructor(spawnX, spawnY) {
+                this.reset(spawnX, spawnY);
+            }
+
+            reset(x, y) {
+                this.crashed = false;
+                this.grounded = false;
+                this.groundTimer = 0;
+
+                // Sled & Rider Nodes:
+                // 0: Sled Rear
+                // 1: Sled Front (Nose)
+                // 2: Rider Hip/Seat
+                // 3: Rider Shoulder
+                // 4: Rider Head
+                // 5: Rider Hands/Feet Anchor
+                this.nodes = [
+                    { x: x - 18, y: y + 10, oldX: x - 18, oldY: y + 10, r: 5,   mass: 6.0, isSled: true },  // 0: Sled tail (heavy)
+                    { x: x + 22, y: y + 10, oldX: x + 22, oldY: y + 10, r: 5,   mass: 6.5, isSled: true },  // 1: Sled nose (slightly heavier for forward stability)
+                    { x: x - 8,  y: y - 4,  oldX: x - 8,  oldY: y - 4,  r: 6,   mass: 0.45, isSled: false }, // 2: Hip (light)
+                    { x: x - 2,  y: y - 24, oldX: x - 2,  oldY: y - 24, r: 6,   mass: 0.25, isSled: false }, // 3: Shoulder (very light)
+                    { x: x + 2,  y: y - 36, oldX: x + 2,  oldY: y - 36, r: 8.5, mass: 0.15, isSled: false, isHead: true }, // 4: Head (featherweight)
+                    { x: x + 12, y: y + 2,  oldX: x + 12, oldY: y + 2,  r: 4,   mass: 0.35, isSled: false }  // 5: Feet/Hands (light)
+                ];
+
+                // Structural & Posture Constraints
+                this.constraints = [
+                    // Solid sled base
+                    { a: 0, b: 1, stiffness: 1.0, breakable: false },
+                    // Hip attached to sled
+                    { a: 0, b: 2, stiffness: 0.98, breakable: true },
+                    { a: 1, b: 2, stiffness: 0.98, breakable: true },
+                    // Feet attached to sled
+                    { a: 1, b: 5, stiffness: 0.98, breakable: true },
+                    { a: 2, b: 5, stiffness: 0.95, breakable: false },
+                    // Torso & Neck
+                    { a: 2, b: 3, stiffness: 0.95, breakable: false },
+                    { a: 3, b: 4, stiffness: 0.95, breakable: false },
+                    { a: 2, b: 4, stiffness: 0.90, breakable: true },
+                    // Posture braces (keep rider upright on sled until crash)
+                    { a: 0, b: 3, stiffness: 0.88, breakable: true },
+                    { a: 1, b: 3, stiffness: 0.88, breakable: true },
+                    { a: 1, b: 4, stiffness: 0.80, breakable: true },
+                    { a: 0, b: 4, stiffness: 0.78, breakable: true },
+                    { a: 3, b: 5, stiffness: 0.90, breakable: false }
+                ];
+
+                // Calculate initial rest lengths
+                for (let c of this.constraints) {
+                    const na = this.nodes[c.a];
+                    const nb = this.nodes[c.b];
+                    c.len = Math.hypot(nb.x - na.x, nb.y - na.y);
+                }
+
+                // Flowing Scarf Nodes (attached to neck/shoulder node 3)
+                this.scarf = [];
+                for (let i = 0; i < 7; i++) {
+                    const sx = this.nodes[3].x - i * 6;
+                    const sy = this.nodes[3].y;
+                    this.scarf.push({ x: sx, y: sy, oldX: sx, oldY: sy });
+                }
+
+                hideWipeoutBanner();
+            }
+
+            triggerWipeout() {
+                if (this.crashed) return;
+                this.crashed = true;
+                // Remove breakable posture constraints so rider becomes a ragdoll separate from the sled
+                this.constraints = this.constraints.filter(c => !c.breakable);
+                // Give a slight dramatic pop
+                this.nodes[3].oldY += 2;
+                this.nodes[4].oldY += 3;
+                showWipeoutBanner();
+            }
+
+            update(dtScale) {
+                const substeps = 8;
+                const gravity = 0.28;
+                const subGravity = gravity / (substeps * substeps);
+
+                this.grounded = false;
+
+                for (let step = 0; step < substeps; step++) {
+                    // 1. Verlet Integration (Ultra-low air resistance for maximum glide)
+                    for (let n of this.nodes) {
+                        const drag = n.isSled ? 0.99995 : 0.9996;
+                        const vx = (n.x - n.oldX) * drag;
+                        const vy = (n.y - n.oldY) * drag;
+                        n.oldX = n.x;
+                        n.oldY = n.y;
+                        n.x += vx * dtScale;
+                        n.y += vy * dtScale + subGravity * dtScale;
+                    }
+
+                    // 2. Solve Stick Constraints
+                    for (let i = 0; i < 4; i++) {
+                        for (let c of this.constraints) {
+                            const na = this.nodes[c.a];
+                            const nb = this.nodes[c.b];
+                            const dx = nb.x - na.x;
+                            const dy = nb.y - na.y;
+                            const dist = Math.hypot(dx, dy) || 0.0001;
+                            const diff = (c.len - dist) / dist * c.stiffness;
+                            const totalMass = na.mass + nb.mass;
+                            const w1 = nb.mass / totalMass;
+                            const w2 = na.mass / totalMass;
+
+                            na.x -= dx * diff * w1;
+                            na.y -= dy * diff * w1;
+                            nb.x += dx * diff * w2;
+                            nb.y += dy * diff * w2;
+                        }
+                    }
+
+                    // 3. Keep rider oriented right-side up relative to sled (prevent triangle inversion)
+                    if (!this.crashed) {
+                        const tail = this.nodes[0];
+                        const nose = this.nodes[1];
+                        const sdx = nose.x - tail.x;
+                        const sdy = nose.y - tail.y;
+                        // Sled upward normal
+                        const upX = sdy;
+                        const upY = -sdx;
+
+                        const hip = this.nodes[2];
+                        const head = this.nodes[4];
+                        const relHeadX = head.x - hip.x;
+                        const relHeadY = head.y - hip.y;
+                        // Dot product between sled up normal and hip->head vector
+                        const dot = relHeadX * upX + relHeadY * upY;
+                        if (dot < -120) {
+                            this.triggerWipeout();
+                        }
+                    }
+
+                    // 4. Line Collisions
+                    this.resolveCollisions(dtScale, substeps);
+                }
+
+                // Update Scarf physics
+                this.updateScarf(dtScale);
+
+                // Telemetry
+                const sledVx = (this.nodes[0].x - this.nodes[0].oldX) + (this.nodes[1].x - this.nodes[1].oldX);
+                const sledVy = (this.nodes[0].y - this.nodes[0].oldY) + (this.nodes[1].y - this.nodes[1].oldY);
+                state.currentSpeed = Math.hypot(sledVx, sledVy) * 1.4;
+
+                if (this.grounded) {
+                    state.airTime = 0;
+                    // Spawn subtle snow dust when moving fast on ground
+                    if (state.currentSpeed > 4 && Math.random() < 0.5) {
+                        spawnParticle(this.nodes[0].x, this.nodes[0].y + 4, -sledVx * 0.15, -Math.random() * 1.5, '#cbd5e1', 18);
+                    }
+                } else {
+                    state.airTime += (1 / 60) * (state.slowMo ? 0.25 : 1);
+                }
+            }
+
+            resolveCollisions(dtScale, substeps) {
+                for (let line of state.lines) {
+                    if (!LINE_STYLES[line.type].solid) continue;
+                    const style = LINE_STYLES[line.type];
+                    const lineRadius = style.width * 0.5;
+
+                    // Quick AABB check
+                    const minX = Math.min(line.x1, line.x2) - 30;
+                    const maxX = Math.max(line.x1, line.x2) + 30;
+                    const minY = Math.min(line.y1, line.y2) - 30;
+                    const maxY = Math.max(line.y1, line.y2) + 30;
+
+                    for (let i = 0; i < this.nodes.length; i++) {
+                        const n = this.nodes[i];
+                        if (n.x < minX || n.x > maxX || n.y < minY || n.y > maxY) continue;
+
+                        // Closest point on segment
+                        const px = n.x - line.x1;
+                        const py = n.y - line.y1;
+                        let t = (px * line.dx + py * line.dy) / line.len;
+                        t = Math.max(0, Math.min(1, t));
+
+                        const closeX = line.x1 + t * line.len * line.dx;
+                        const closeY = line.y1 + t * line.len * line.dy;
+
+                        const distX = n.x - closeX;
+                        const distY = n.y - closeY;
+                        const dist = Math.hypot(distX, distY);
+                        const minDist = n.r + lineRadius;
+
+                        if (dist < minDist && dist > 0.0001) {
+                            const nx = distX / dist;
+                            const ny = distY / dist;
+                            const overlap = minDist - dist;
+
+                            // Velocity before collision
+                            const vx = n.x - n.oldX;
+                            const vy = n.y - n.oldY;
+
+                            // Push out of collision
+                            n.x += nx * overlap;
+                            n.y += ny * overlap;
+
+                            this.grounded = true;
+
+                            // Head-on or upside-down impact detection
+                            const normalVel = vx * nx + vy * ny;
+                            if (!this.crashed) {
+                                if (n.isHead && Math.hypot(vx, vy) > 2.2) {
+                                    this.triggerWipeout();
+                                } else if (normalVel < -11.5 && line.type !== 'bounce') {
+                                    this.triggerWipeout();
+                                }
+                            }
+
+                            // Tangential velocity (along the track)
+                            const tangentX = -ny;
+                            const tangentY = nx;
+                            const tangentVel = vx * tangentX + vy * tangentY;
+
+                            // Preserve momentum smoothly across track angles so the sled glides like ice
+                            const speed = Math.hypot(vx, vy);
+                            const sign = tangentVel >= 0 ? 1 : -1;
+                            const glideVel = (!this.crashed && n.isSled && normalVel < 0)
+                                ? (tangentVel * 0.65 + sign * speed * 0.35)
+                                : tangentVel;
+
+                            // Apply friction (near-zero when upright on sled)
+                            const friction = this.crashed ? 0.04 : (n.isSled ? style.friction : style.friction * 2);
+                            let newVx = tangentX * glideVel * (1 - friction);
+                            let newVy = tangentY * glideVel * (1 - friction);
+
+                            // Apply Bounce if Trampoline line
+                            if (line.type === 'bounce') {
+                                const bounceSpeed = Math.max(Math.abs(normalVel) * style.bounce, 7.5);
+                                newVx += nx * bounceSpeed;
+                                newVy += ny * bounceSpeed;
+                                if (Math.random() < 0.4) {
+                                    spawnParticle(closeX, closeY, nx * 3 + (Math.random() - 0.5) * 3, ny * 3, '#10b981', 25);
+                                }
+                            } else if (normalVel < 0) {
+                                // Gentle restitution
+                                newVx -= nx * normalVel * style.bounce;
+                                newVy -= ny * normalVel * style.bounce;
+                            }
+
+                            // Apply Boost if Red Boost line
+                            if (line.type === 'boost' && n.isSled) {
+                                const boostAmt = (style.boost / substeps) * dtScale;
+                                newVx += line.dx * boostAmt;
+                                newVy += line.dy * boostAmt;
+                                if (Math.random() < 0.25) {
+                                    spawnParticle(n.x, n.y, -line.dx * 4 + (Math.random()-0.5)*2, -line.dy * 4 + (Math.random()-0.5)*2, '#ef4444', 20);
+                                }
+                            }
+
+                            n.oldX = n.x - newVx;
+                            n.oldY = n.y - newVy;
+                        }
+                    }
+                }
+            }
+
+            updateScarf(dtScale) {
+                // Anchor node 0 of scarf to rider neck
+                this.scarf[0].x = this.nodes[3].x;
+                this.scarf[0].y = this.nodes[3].y;
+
+                for (let i = 1; i < this.scarf.length; i++) {
+                    const s = this.scarf[i];
+                    const vx = (s.x - s.oldX) * 0.92;
+                    const vy = (s.y - s.oldY) * 0.92;
+                    s.oldX = s.x;
+                    s.oldY = s.y;
+                    // Slight flutter & gravity
+                    s.x += vx * dtScale + (Math.random() - 0.5) * 0.3;
+                    s.y += vy * dtScale + 0.12 * dtScale;
+                }
+
+                // Constrain scarf segments
+                const segLen = 5.5;
+                for (let iter = 0; iter < 3; iter++) {
+                    for (let i = 1; i < this.scarf.length; i++) {
+                        const a = this.scarf[i - 1];
+                        const b = this.scarf[i];
+                        const dx = b.x - a.x;
+                        const dy = b.y - a.y;
+                        const d = Math.hypot(dx, dy) || 0.001;
+                        const diff = (segLen - d) / d;
+                        b.x += dx * diff;
+                        b.y += dy * diff;
+                    }
+                }
+            }
+
+            draw(ctx, isGhost = false) {
+                ctx.save();
+                if (isGhost) ctx.globalAlpha = 0.35;
+
+                const tail = this.nodes[0];
+                const nose = this.nodes[1];
+                const hip = this.nodes[2];
+                const shoulder = this.nodes[3];
+                const head = this.nodes[4];
+                const feet = this.nodes[5];
+
+                // 1. Draw Flowing Scarf (Red & White stripes)
+                for (let i = 0; i < this.scarf.length - 1; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(this.scarf[i].x, this.scarf[i].y);
+                    ctx.lineTo(this.scarf[i + 1].x, this.scarf[i + 1].y);
+                    ctx.strokeStyle = i % 2 === 0 ? '#ef4444' : '#ffffff';
+                    ctx.lineWidth = 5 - i * 0.4;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                }
+
+                // 2. Draw Sled
+                const sledAngle = Math.atan2(nose.y - tail.y, nose.x - tail.x);
+                ctx.save();
+                ctx.translate(tail.x, tail.y);
+                ctx.rotate(sledAngle);
+                const sledLen = Math.hypot(nose.x - tail.x, nose.y - tail.y);
+
+                // Sled runner blade
+                ctx.beginPath();
+                ctx.moveTo(-4, 4);
+                ctx.lineTo(sledLen + 2, 4);
+                ctx.quadraticCurveTo(sledLen + 11, 4, sledLen + 9, -5);
+                ctx.strokeStyle = '#d97706'; // Golden wood/metal runner
+                ctx.lineWidth = 3.5;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Sled deck
+                ctx.beginPath();
+                ctx.moveTo(-2, -1);
+                ctx.lineTo(sledLen, -1);
+                ctx.strokeStyle = '#b45309';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Struts
+                ctx.beginPath();
+                ctx.moveTo(5, -1); ctx.lineTo(5, 4);
+                ctx.moveTo(sledLen - 6, -1); ctx.lineTo(sledLen - 6, 4);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.restore();
+
+                // 3. Draw Stick Rider Body
+                const bodyColor = state.darkMode ? '#f8fafc' : '#0f172a';
+
+                // Legs (Hip to Feet)
+                ctx.beginPath();
+                const kneeX = (hip.x + feet.x) * 0.5 + (shoulder.x - hip.x) * 0.15;
+                const kneeY = (hip.y + feet.y) * 0.5 - 3;
+                ctx.moveTo(hip.x, hip.y);
+                ctx.lineTo(kneeX, kneeY);
+                ctx.lineTo(feet.x, feet.y);
+                ctx.strokeStyle = '#1e3a8a';
+                ctx.lineWidth = 4.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+
+                // Torso (Hip to Shoulder)
+                ctx.beginPath();
+                ctx.moveTo(hip.x, hip.y);
+                ctx.lineTo(shoulder.x, shoulder.y);
+                ctx.strokeStyle = bodyColor;
+                ctx.lineWidth = 5.5;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Arm (Shoulder to Sled Nose/Handle)
+                ctx.beginPath();
+                ctx.moveTo(shoulder.x, shoulder.y);
+                ctx.lineTo(feet.x + 2, feet.y - 4);
+                ctx.strokeStyle = bodyColor;
+                ctx.lineWidth = 3.8;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // 4. Draw Head & Winter Hat
+                ctx.beginPath();
+                ctx.arc(head.x, head.y, head.r - 1.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = bodyColor;
+                ctx.stroke();
+
+                // Beanie / Hat
+                const headAngle = Math.atan2(head.y - shoulder.y, head.x - shoulder.x);
+                ctx.save();
+                ctx.translate(head.x, head.y);
+                ctx.rotate(headAngle + Math.PI / 2);
+                ctx.beginPath();
+                ctx.arc(0, 0, head.r - 1, Math.PI, 0);
+                ctx.fillStyle = '#ef4444';
+                ctx.fill();
+                // Pom-pom
+                ctx.beginPath();
+                ctx.arc(0, -head.r - 1, 3.5, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.restore();
+
+                ctx.restore();
+            }
+        }
+
+        // --- Particle System ---
+        function spawnParticle(x, y, vx, vy, color, life = 24) {
+            state.particles.push({ x, y, vx, vy, color, life, maxLife: life });
+        }
+
+        function updateAndDrawParticles(ctx) {
+            for (let i = state.particles.length - 1; i >= 0; i--) {
+                const p = state.particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.12;
+                p.life--;
+                if (p.life <= 0) {
+                    state.particles.splice(i, 1);
+                    continue;
+                }
+                ctx.save();
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // --- Initialize Rider & Demo Track ---
+        const rider = new SledRider(0, 0);
+
+        function loadDemoTrack() {
+            saveHistory();
+            state.lines = [];
+            state.spawnPoint = { x: 0, y: 0 };
+
+            // Helper to add smooth curve from control points
+            function addCurve(pts, type = 'normal', segments = 18) {
+                for (let i = 0; i < pts.length - 1; i++) {
+                    const p0 = pts[Math.max(0, i - 1)];
+                    const p1 = pts[i];
+                    const p2 = pts[i + 1];
+                    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+
+                    let prevX = p1.x;
+                    let prevY = p1.y;
+
+                    for (let s = 1; s <= segments; s++) {
+                        const t = s / segments;
+                        const t2 = t * t;
+                        const t3 = t2 * t;
+
+                        // Catmull-Rom spline
+                        const x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x) * t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x) * t3);
+                        const y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y) * t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y) * t3);
+
+                        const seg = createLineSegment(prevX, prevY, x, y, type);
+                        if (seg) state.lines.push(seg);
+                        prevX = x;
+                        prevY = y;
+                    }
+                }
+            }
+
+            // 1. Starter Drop & Smooth Swoop
+            addCurve([
+                { x: -60, y: 15 },
+                { x: 10,  y: 25 },
+                { x: 140, y: 110 },
+                { x: 290, y: 240 },
+                { x: 450, y: 290 },
+                { x: 600, y: 270 }
+            ], 'normal', 12);
+
+            // 2. High-Speed Boost Ramp
+            addCurve([
+                { x: 600, y: 270 },
+                { x: 740, y: 230 },
+                { x: 870, y: 150 }
+            ], 'boost', 10);
+
+            // 3. Big Catch Slope & Valley
+            addCurve([
+                { x: 1100, y: 210 },
+                { x: 1250, y: 340 },
+                { x: 1450, y: 400 },
+                { x: 1650, y: 370 },
+                { x: 1800, y: 280 }
+            ], 'normal', 12);
+
+            // 4. Boost Into Giant Loop-de-Loop
+            addCurve([
+                { x: 1650, y: 370 },
+                { x: 1800, y: 280 }
+            ], 'boost', 8);
+
+            // Giant Vertical Loop
+            const loopCenterX = 1720;
+            const loopCenterY = 140;
+            const loopRadius = 155;
+            const loopSteps = 38;
+            let lx = 1800, ly = 280;
+            for (let i = 1; i <= loopSteps; i++) {
+                const ang = (Math.PI * 0.35) - (i / loopSteps) * (Math.PI * 1.85);
+                const nx = loopCenterX + Math.cos(ang) * loopRadius + (i * 2.2);
+                const ny = loopCenterY + Math.sin(ang) * loopRadius;
+                const type = i < 12 ? 'boost' : 'normal';
+                const seg = createLineSegment(lx, ly, nx, ny, type);
+                if (seg) state.lines.push(seg);
+                lx = nx; ly = ny;
+            }
+
+            // 5. Loop Exit into Trampoline Bounce Pad
+            addCurve([
+                { x: lx, y: ly },
+                { x: 1980, y: 320 },
+                { x: 2150, y: 360 }
+            ], 'normal', 10);
+
+            // Green Bounce Pad
+            const bounceSeg = createLineSegment(2160, 360, 2320, 340, 'bounce');
+            if (bounceSeg) state.lines.push(bounceSeg);
+
+            // 6. Final Smooth Landing Runout
+            addCurve([
+                { x: 2520, y: 260 },
+                { x: 2700, y: 350 },
+                { x: 2950, y: 380 },
+                { x: 3250, y: 380 },
+                { x: 3400, y: 340 }
+            ], 'normal', 12);
+
+            // 7. Scenery Mountains & Pine Trees in Background
+            const mtnPts = [
+                [-100, 320], [150, 120], [380, 290], [680, 60], [980, 280],
+                [1250, 90], [1550, 310], [1950, 40], [2350, 290], [2700, 110], [3100, 330]
+            ];
+            for (let i = 0; i < mtnPts.length - 1; i++) {
+                const seg = createLineSegment(mtnPts[i][0], mtnPts[i][1], mtnPts[i+1][0], mtnPts[i+1][1], 'scenery');
+                if (seg) state.lines.push(seg);
+            }
+
+            resetSimulation();
+            centerCameraOnRider();
+            updateHistoryUI();
+        }
+
+        // --- Playback Controls ---
+        function togglePlayPause() {
+            if (state.mode === 'edit') {
+                state.mode = 'play';
+            } else if (state.mode === 'play') {
+                state.mode = 'paused';
+            } else if (state.mode === 'paused') {
+                state.mode = 'play';
+            }
+            updatePlaybackUI();
+        }
+
+        function resetSimulation() {
+            state.mode = 'edit';
+            state.airTime = 0;
+            state.currentSpeed = 0;
+            state.particles = [];
+            rider.reset(state.spawnPoint.x, state.spawnPoint.y);
+            updatePlaybackUI();
+        }
+
+        function updatePlaybackUI() {
+            const btn = document.getElementById('btnPlayPause');
+            const icon = document.getElementById('iconPlayPause');
+            const text = document.getElementById('textPlayPause');
+
+            if (state.mode === 'play') {
+                icon.className = 'fa-solid fa-pause';
+                text.textContent = 'Pause';
+                btn.className = 'tool-btn px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-white font-semibold text-xs flex items-center gap-2 shadow-sm';
+            } else {
+                icon.className = 'fa-solid fa-play';
+                text.textContent = state.mode === 'paused' ? 'Resume' : 'Play';
+                btn.className = 'tool-btn px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center gap-2 shadow-sm';
+            }
+        }
+
+        function centerCameraOnRider() {
+            const target = state.mode === 'edit' ? state.spawnPoint : rider.nodes[2];
+            state.camera.x = target.x + 120;
+            state.camera.y = target.y + 40;
+        }
+
+        function showWipeoutBanner() {
+            const banner = document.getElementById('statusBanner');
+            banner.classList.remove('opacity-0', 'scale-90');
+            banner.classList.add('opacity-100', 'scale-100');
+        }
+
+        function hideWipeoutBanner() {
+            const banner = document.getElementById('statusBanner');
+            banner.classList.add('opacity-0', 'scale-90');
+            banner.classList.remove('opacity-100', 'scale-100');
+        }
+
+        // --- Erase Lines Within Brush ---
+        function eraseAtWorldPos(wx, wy) {
+            const r = state.eraserRadius / state.camera.zoom;
+            const beforeCount = state.lines.length;
+            state.lines = state.lines.filter(line => {
+                // Distance from point to segment
+                const px = wx - line.x1;
+                const py = wy - line.y1;
+                let t = (px * line.dx + py * line.dy) / line.len;
+                t = Math.max(0, Math.min(1, t));
+                const cx = line.x1 + t * line.len * line.dx;
+                const cy = line.y1 + t * line.len * line.dy;
+                return Math.hypot(wx - cx, wy - cy) > r;
+            });
+            if (state.lines.length !== beforeCount) {
+                document.getElementById('statLines').textContent = state.lines.length;
+            }
+        }
+
+        // --- Pointer & Multi-Touch Input Handling ---
+        canvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
+            state.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+            // If 2 fingers are down, switch to pinch-zoom / pan gesture
+            if (state.touches.size === 2) {
+                const pts = Array.from(state.touches.values());
+                state.lastPinchDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+                state.pointer.active = false;
+                return;
+            }
+
+            const worldPos = screenToWorld(e.clientX, e.clientY);
+            state.pointer.startX = worldPos.x;
+            state.pointer.startY = worldPos.y;
+            state.pointer.worldX = worldPos.x;
+            state.pointer.worldY = worldPos.y;
+            state.pointer.lastWorldX = worldPos.x;
+            state.pointer.lastWorldY = worldPos.y;
+            state.pointer.lastScreenX = e.clientX;
+            state.pointer.lastScreenY = e.clientY;
+
+            // Middle click, Right click, or Pan tool
+            if (e.button === 1 || e.button === 2 || state.tool === 'pan') {
+                state.pointer.panning = true;
+                canvas.style.cursor = 'grabbing';
+                return;
+            }
+
+            state.pointer.active = true;
+
+            if (state.tool === 'flag') {
+                state.spawnPoint = { x: worldPos.x, y: worldPos.y - 15 };
+                if (state.mode === 'edit') {
+                    rider.reset(state.spawnPoint.x, state.spawnPoint.y);
+                }
+                state.pointer.active = false;
+            } else if (state.tool === 'pencil' || state.tool === 'eraser') {
+                saveHistory();
+                if (state.tool === 'eraser') {
+                    eraseAtWorldPos(worldPos.x, worldPos.y);
+                }
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            e.preventDefault();
+            if (state.touches.has(e.pointerId)) {
+                state.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            }
+
+            // Handle 2-finger pinch zoom & pan
+            if (state.touches.size === 2) {
+                const pts = Array.from(state.touches.values());
+                const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+                const midX = (pts[0].x + pts[1].x) * 0.5;
+                const midY = (pts[0].y + pts[1].y) * 0.5;
+
+                if (state.lastPinchDist) {
+                    const scale = dist / state.lastPinchDist;
+                    state.camera.zoom = Math.max(0.2, Math.min(3.0, state.camera.zoom * scale));
+                }
+                state.lastPinchDist = dist;
+
+                const dx = midX - state.pointer.lastScreenX;
+                const dy = midY - state.pointer.lastScreenY;
+                if (Math.hypot(dx, dy) < 100) {
+                    state.camera.x -= dx / state.camera.zoom;
+                    state.camera.y -= dy / state.camera.zoom;
+                }
+                state.pointer.lastScreenX = midX;
+                state.pointer.lastScreenY = midY;
+                return;
+            }
+
+            const worldPos = screenToWorld(e.clientX, e.clientY);
+            state.pointer.worldX = worldPos.x;
+            state.pointer.worldY = worldPos.y;
+
+            if (state.pointer.panning) {
+                const dx = e.clientX - state.pointer.lastScreenX;
+                const dy = e.clientY - state.pointer.lastScreenY;
+                state.camera.x -= dx / state.camera.zoom;
+                state.camera.y -= dy / state.camera.zoom;
+                state.pointer.lastScreenX = e.clientX;
+                state.pointer.lastScreenY = e.clientY;
+                return;
+            }
+
+            if (!state.pointer.active) return;
+
+            if (state.tool === 'pencil') {
+                const dist = Math.hypot(worldPos.x - state.pointer.lastWorldX, worldPos.y - state.pointer.lastWorldY);
+                if (dist >= state.minSegmentLength / state.camera.zoom) {
+                    const seg = createLineSegment(
+                        state.pointer.lastWorldX,
+                        state.pointer.lastWorldY,
+                        worldPos.x,
+                        worldPos.y,
+                        state.lineType
+                    );
+                    if (seg) {
+                        state.lines.push(seg);
+                        document.getElementById('statLines').textContent = state.lines.length;
+                    }
+                    state.pointer.lastWorldX = worldPos.x;
+                    state.pointer.lastWorldY = worldPos.y;
+                }
+            } else if (state.tool === 'eraser') {
+                eraseAtWorldPos(worldPos.x, worldPos.y);
+            }
+        });
+
+        function handlePointerUp(e) {
+            state.touches.delete(e.pointerId);
+            if (state.touches.size < 2) state.lastPinchDist = null;
+
+            if (state.pointer.panning) {
+                state.pointer.panning = false;
+                updateCursor();
+            }
+
+            if (state.pointer.active) {
+                if (state.tool === 'line') {
+                    const dist = Math.hypot(state.pointer.worldX - state.pointer.startX, state.pointer.worldY - state.pointer.startY);
+                    if (dist > 5) {
+                        saveHistory();
+                        const seg = createLineSegment(
+                            state.pointer.startX,
+                            state.pointer.startY,
+                            state.pointer.worldX,
+                            state.pointer.worldY,
+                            state.lineType
+                        );
+                        if (seg) {
+                            state.lines.push(seg);
+                            document.getElementById('statLines').textContent = state.lines.length;
+                        }
+                    }
+                }
+                state.pointer.active = false;
+            }
+        }
+
+        canvas.addEventListener('pointerup', handlePointerUp);
+        canvas.addEventListener('pointercancel', handlePointerUp);
+        canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Mouse Wheel Zoom
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+            const beforeWorld = screenToWorld(e.clientX, e.clientY);
+            state.camera.zoom = Math.max(0.2, Math.min(3.5, state.camera.zoom * zoomFactor));
+            const afterWorld = screenToWorld(e.clientX, e.clientY);
+            state.camera.x += (beforeWorld.x - afterWorld.x);
+            state.camera.y += (beforeWorld.y - afterWorld.y);
+        }, { passive: false });
+
+        // --- Rendering Engine ---
+        function drawGrid() {
+            const bg = state.darkMode ? '#0f172a' : '#f8fafc';
+            ctx.fillStyle = bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const gridStep = 50;
+            const scaledStep = gridStep * state.camera.zoom;
+            if (scaledStep < 8) return;
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = state.darkMode ? 'rgba(51, 65, 85, 0.45)' : 'rgba(203, 213, 225, 0.65)';
+
+            const startWorld = screenToWorld(0, 0);
+            const endWorld = screenToWorld(canvas.width, canvas.height);
+
+            const firstX = Math.floor(startWorld.x / gridStep) * gridStep;
+            const firstY = Math.floor(startWorld.y / gridStep) * gridStep;
+
+            ctx.beginPath();
+            for (let x = firstX; x <= endWorld.x; x += gridStep) {
+                const sx = (x - state.camera.x) * state.camera.zoom + canvas.width / 2;
+                ctx.moveTo(sx, 0);
+                ctx.lineTo(sx, canvas.height);
+            }
+            for (let y = firstY; y <= endWorld.y; y += gridStep) {
+                const sy = (y - state.camera.y) * state.camera.zoom + canvas.height / 2;
+                ctx.moveTo(0, sy);
+                ctx.lineTo(canvas.width, sy);
+            }
+            ctx.stroke();
+        }
+
+        function drawStartFlag(ctx) {
+            const sp = state.spawnPoint;
+            ctx.save();
+            ctx.translate(sp.x - 28, sp.y + 12);
+
+            // Pole
+            ctx.beginPath();
+            ctx.moveTo(0, 5);
+            ctx.lineTo(0, -38);
+            ctx.strokeStyle = state.darkMode ? '#e2e8f0' : '#334155';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+
+            // Pennant Flag
+            ctx.beginPath();
+            ctx.moveTo(0, -38);
+            ctx.lineTo(24, -30);
+            ctx.lineTo(0, -22);
+            ctx.closePath();
+            ctx.fillStyle = '#f59e0b';
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawTrackLines(ctx) {
+            const topLeft = screenToWorld(0, 0);
+            const bottomRight = screenToWorld(canvas.width, canvas.height);
+            const margin = 80;
+
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+
+            for (let line of state.lines) {
+                // Viewport culling
+                if (Math.max(line.x1, line.x2) < topLeft.x - margin ||
+                    Math.min(line.x1, line.x2) > bottomRight.x + margin ||
+                    Math.max(line.y1, line.y2) < topLeft.y - margin ||
+                    Math.min(line.y1, line.y2) > bottomRight.y + margin) {
+                    continue;
+                }
+
+                const style = LINE_STYLES[line.type];
+                ctx.beginPath();
+                ctx.moveTo(line.x1, line.y1);
+                ctx.lineTo(line.x2, line.y2);
+                ctx.strokeStyle = state.darkMode ? style.darkColor : style.color;
+                ctx.lineWidth = style.width;
+                ctx.stroke();
+
+                // Directional chevrons on Boost lines
+                if (line.type === 'boost' && line.len > 15) {
+                    const midX = (line.x1 + line.x2) * 0.5;
+                    const midY = (line.y1 + line.y2) * 0.5;
+                    const angle = Math.atan2(line.dy, line.dx);
+                    ctx.save();
+                    ctx.translate(midX, midY);
+                    ctx.rotate(angle);
+                    ctx.beginPath();
+                    ctx.moveTo(-4, -5);
+                    ctx.lineTo(4, 0);
+                    ctx.lineTo(-4, 5);
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // Spring coil indicator on Bounce lines
+                if (line.type === 'bounce' && line.len > 15) {
+                    ctx.beginPath();
+                    ctx.moveTo(line.x1 + line.nx * 4, line.y1 + line.ny * 4);
+                    ctx.lineTo(line.x2 + line.nx * 4, line.y2 + line.ny * 4);
+                    ctx.strokeStyle = state.darkMode ? 'rgba(52, 211, 153, 0.35)' : 'rgba(16, 185, 129, 0.35)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        function drawToolPreview(ctx) {
+            if (state.tool === 'line' && state.pointer.active) {
+                const style = LINE_STYLES[state.lineType];
+                ctx.save();
+                ctx.beginPath();
+                ctx.setLineDash([8 / state.camera.zoom, 6 / state.camera.zoom]);
+                ctx.moveTo(state.pointer.startX, state.pointer.startY);
+                ctx.lineTo(state.pointer.worldX, state.pointer.worldY);
+                ctx.strokeStyle = state.darkMode ? style.darkColor : style.color;
+                ctx.lineWidth = style.width;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+                ctx.restore();
+            } else if (state.tool === 'eraser') {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(state.pointer.worldX, state.pointer.worldY, state.eraserRadius / state.camera.zoom, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
+                ctx.fill();
+                ctx.lineWidth = 1.5 / state.camera.zoom;
+                ctx.strokeStyle = '#f43f5e';
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        // --- Main Animation Loop ---
+        function gameLoop() {
+            // Update physics if playing
+            if (state.mode === 'play') {
+                const dtScale = state.slowMo ? 0.25 : 1.0;
+                rider.update(dtScale);
+
+                // Smooth Follow Camera
+                if (state.followCam && !state.pointer.panning && state.touches.size < 2) {
+                    const focus = rider.nodes[2];
+                    const vx = focus.x - focus.oldX;
+                    const vy = focus.y - focus.oldY;
+                    const targetX = focus.x + vx * 14;
+                    const targetY = focus.y + vy * 10;
+                    state.camera.x += (targetX - state.camera.x) * 0.1;
+                    state.camera.y += (targetY - state.camera.y) * 0.1;
+                }
+            }
+
+            // Update Telemetry HUD
+            document.getElementById('statSpeed').textContent = state.currentSpeed.toFixed(1);
+            document.getElementById('statAir').textContent = state.airTime.toFixed(1) + 's';
+
+            // Render Scene
+            drawGrid();
+
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(state.camera.zoom, state.camera.zoom);
+            ctx.translate(-state.camera.x, -state.camera.y);
+
+            drawStartFlag(ctx);
+            drawTrackLines(ctx);
+            updateAndDrawParticles(ctx);
+
+            // Draw ghost rider at start flag when playing
+            if (state.mode !== 'edit') {
+                const ghost = new SledRider(state.spawnPoint.x, state.spawnPoint.y);
+                ghost.draw(ctx, true);
+            }
+
+            rider.draw(ctx, false);
+            drawToolPreview(ctx);
+
+            ctx.restore();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- UI Event Listeners ---
+        function updateCursor() {
+            if (state.tool === 'pan') canvas.style.cursor = 'grab';
+            else if (state.tool === 'eraser') canvas.style.cursor = 'none';
+            else if (state.tool === 'flag') canvas.style.cursor = 'pointer';
+            else canvas.style.cursor = 'crosshair';
+        }
+
+        document.querySelectorAll('.draw-tool-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.draw-tool-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.tool = btn.dataset.tool;
+                updateCursor();
+            });
+        });
+
+        document.querySelectorAll('.line-type-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.line-type-btn').forEach(b => {
+                    b.classList.remove('active-normal', 'active-boost', 'active-bounce', 'active-scenery');
+                });
+                const type = btn.dataset.linetype;
+                state.lineType = type;
+                btn.classList.add(`active-${type}`);
+                // Switch to pencil or line automatically if on eraser/pan
+                if (state.tool !== 'pencil' && state.tool !== 'line') {
+                    document.querySelector('[data-tool="pencil"]').click();
+                }
+            });
+        });
+
+        document.getElementById('btnPlayPause').addEventListener('click', togglePlayPause);
+        document.getElementById('btnStop').addEventListener('click', resetSimulation);
+
+        document.getElementById('btnSlowMo').addEventListener('click', () => {
+            state.slowMo = !state.slowMo;
+            document.getElementById('textSlowMo').textContent = state.slowMo ? '0.25x' : '1x';
+            document.getElementById('btnSlowMo').classList.toggle('active', state.slowMo);
+        });
+
+        document.getElementById('btnFollowCam').addEventListener('click', () => {
+            state.followCam = !state.followCam;
+            document.getElementById('btnFollowCam').classList.toggle('active', state.followCam);
+        });
+
+        document.getElementById('btnCenter').addEventListener('click', centerCameraOnRider);
+        document.getElementById('btnDemo').addEventListener('click', loadDemoTrack);
+        document.getElementById('btnUndo').addEventListener('click', undo);
+        document.getElementById('btnRedo').addEventListener('click', redo);
+
+        // Theme Toggle
+        document.getElementById('btnTheme').addEventListener('click', () => {
+            state.darkMode = !state.darkMode;
+            document.documentElement.classList.toggle('dark', state.darkMode);
+            document.getElementById('iconTheme').className = state.darkMode ? 'fa-solid fa-sun text-amber-400' : 'fa-solid fa-moon';
+        });
+
+        // Clear Track Modal
+        const confirmModal = document.getElementById('confirmModal');
+        document.getElementById('btnClear').addEventListener('click', () => {
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+        });
+        document.getElementById('btnModalCancel').addEventListener('click', () => {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+        });
+        document.getElementById('btnModalConfirm').addEventListener('click', () => {
+            saveHistory();
+            state.lines = [];
+            resetSimulation();
+            updateHistoryUI();
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+        });
+
+        // Keyboard Shortcuts
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlayPause();
+            } else if (e.key === 'r' || e.key === 'R') {
+                resetSimulation();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                undo();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        });
+
+        // Resize Handler
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        // Start Application on Window Load
+        window.onload = function () {
+            resizeCanvas();
+            loadDemoTrack();
+            gameLoop();
+        };
+    </script>
+<script>if("serviceWorker" in navigator){addEventListener("load",()=>navigator.serviceWorker.register("sw.js"));}</script>
+</body>
+</html>
